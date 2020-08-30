@@ -23,14 +23,16 @@ Creates the 'Recipe' table
 ### `/table` (GET)
 Returns a list of all tables in the DynamoDB
 
-### `/recipe` (POST)
-Creates a recipe
+### `/recipe`
+(POST) Creates a recipe
+(GET) Lists all recipes
 
 #### Input
-Requires a JSON Body with valid Recipe types (see data structure below)
+(POST) Requires a JSON Body with valid Recipe types (see data structure below)
 
 #### Output
-Success message
+(POST) Success message
+(GET) List of recipes
 
 ## Data Structure
 Recipe:
