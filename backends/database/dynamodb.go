@@ -29,13 +29,6 @@ type Recipe struct {
 	Steps       []string
 }
 
-const (
-	breakfast = "Breakfast"
-	lunch     = "Lunch"
-	dinner    = "Dinner"
-	dessert   = "dessert"
-)
-
 func init() {
 	region := os.Getenv("AWS_REGION")
 	if region == "" {
