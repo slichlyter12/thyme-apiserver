@@ -33,7 +33,7 @@ Requires a JSON Body with valid Recipe types (see data structure below)
 Success message
 
 ## Data Structure
-`Recipe`
+Recipe:
 ```
     {
         "name":     string,
