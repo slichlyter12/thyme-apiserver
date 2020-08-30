@@ -34,7 +34,7 @@ Success message
 
 ## Data Structure
 `Recipe`
-```json
+```
     {
         "name":     string,
         "author":   string
