@@ -1,11 +1,15 @@
 package database
 
 import (
+	"errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+
+	uuid "github.com/nu7hatch/gouuid"
 
 	"fmt"
 	"os"
@@ -15,9 +19,22 @@ var svc *dynamodb.DynamoDB
 
 // Recipe that users can create
 type Recipe struct {
-	Name   string
-	Author string
+	ID          string
+	Name        string
+	Author      string
+	Description string
+	Cuisine     string
+	ImageName   string
+	Ingredients map[string]string
+	Steps       []string
 }
+
+const (
+	breakfast = "Breakfast"
+	lunch     = "Lunch"
+	dinner    = "Dinner"
+	dessert   = "dessert"
+)
 
 func init() {
 	region := os.Getenv("AWS_REGION")
@@ -48,7 +65,7 @@ func CreateRecipeTable() error {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("Name"),
+				AttributeName: aws.String("ID"),
 				AttributeType: aws.String("S"),
 			},
 			{
@@ -58,7 +75,7 @@ func CreateRecipeTable() error {
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("Name"),
+				AttributeName: aws.String("ID"),
 				KeyType:       aws.String("HASH"),
 			},
 			{
@@ -134,31 +151,41 @@ func DeleteTable(tableName string) error {
 
 // - MARK: Recipe methods
 
-// SaveRecipe saves a recipe to the dynamodb Recipe table
-func SaveRecipe(recipe Recipe) error {
+// SaveRecipe saves a recipe to the DynamoDB Recipe table
+func SaveRecipe(recipe Recipe) (string, error) {
+	// generate UUID
+	id, err := uuid.NewV4()
+	if err != nil {
+		fmt.Printf("Error generating UUID, %s", err.Error())
+	}
+	recipe.ID = id.String()
+
+	// marshal recipe
 	av, err := dynamodbattribute.MarshalMap(recipe)
 	if err != nil {
 		fmt.Printf("Error marshalling recipe item: %s\n", err.Error())
-		return err
+		return "", err
 	}
 
 	tableName := "Recipe"
 
 	input := &dynamodb.PutItemInput{
-		Item:      av,
-		TableName: aws.String(tableName),
+		Item:         av,
+		TableName:    aws.String(tableName),
+		ReturnValues: aws.String("ALL_OLD"),
 	}
 
+	// save recipe
 	_, err = svc.PutItem(input)
 	if err != nil {
 		fmt.Printf("Error saving recipe: %s\n", err.Error())
-		return err
+		return "", err
 	}
 
-	return nil
+	return id.String(), nil
 }
 
-// ListAllRecipes returns a list of all recipes
+// ListAllRecipes returns a list of all recipes as a slice of recipe structs
 func ListAllRecipes() ([]Recipe, error) {
 	tableName := "Recipe"
 	params := &dynamodb.ScanInput{
@@ -177,4 +204,34 @@ func ListAllRecipes() ([]Recipe, error) {
 	}
 
 	return recipes, nil
+}
+
+// GetRecipe fetches a recipe by it's ID
+func GetRecipe(id string) (Recipe, error) {
+	tableName := "Recipe"
+
+	var recipe Recipe
+
+	result, err := svc.GetItem(&dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"ID": {
+				S: aws.String(id),
+			},
+		},
+	})
+	if err != nil {
+		return recipe, err
+	}
+
+	if result.Item == nil {
+		return recipe, errors.New("Could not find recipe with id: " + id)
+	}
+
+	err = dynamodbattribute.UnmarshalMap(result.Item, &recipe)
+	if err != nil {
+		return recipe, err
+	}
+
+	return recipe, nil
 }

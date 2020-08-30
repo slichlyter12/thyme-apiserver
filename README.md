@@ -37,9 +37,15 @@ Returns a list of all tables in the DynamoDB
 
 ## Data Structure
 Recipe:
-```
-    {
-        "name":     string,
-        "author":   string
+```golang
+    type Recipe struct {
+        ID          string
+        Name        string
+        Author      string
+        Description string
+        Cuisine     string
+        imageName   string
+        incredients map[string]string
+        steps       []string
     }
 ```

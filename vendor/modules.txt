@@ -44,3 +44,6 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 github.com/gorilla/mux
 # github.com/jmespath/go-jmespath v0.3.0
 github.com/jmespath/go-jmespath
+# github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
+## explicit
+github.com/nu7hatch/gouuid

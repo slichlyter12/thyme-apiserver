@@ -2,13 +2,14 @@ package rest
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/slichlyter12/thyme-apiserver/backends/database"
 )
 
-// Router is the router used by the rest package
+// Router handles all the URLS for the API server
 var Router *mux.Router
 
 func init() {
@@ -18,6 +19,7 @@ func init() {
 	Router.HandleFunc("/recipe", handleRecipe)
 }
 
+// handles the /init route
 func handleInit(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
@@ -28,6 +30,7 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
+// handles the /table route
 func handleTable(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -38,6 +41,7 @@ func handleTable(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
+// handles the /recipe route
 func handleRecipe(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -51,6 +55,9 @@ func handleRecipe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
+// - MARK: Table methods
+
+// creates the Recipe table
 func setup(w http.ResponseWriter, r *http.Request) {
 	err := database.CreateRecipeTable()
 	if err != nil {
@@ -61,6 +68,8 @@ func setup(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`OK`))
 }
 
+// list all tables in DynamoDB, including those not used
+// by this API server
 func listTables(w http.ResponseWriter, r *http.Request) {
 	tables, derr := database.GetTables()
 	if tables == nil {
@@ -82,6 +91,9 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 	w.Write(bytes)
 }
 
+// - MARK: Recipe methods
+
+// save a recipe from the body of the method in JSON format
 func saveRecipe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -95,16 +107,17 @@ func saveRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = database.SaveRecipe(recipe)
+	id, err := database.SaveRecipe(recipe)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"message": "error saving recipe"}`))
 		return
 	}
 
-	w.Write([]byte(`{"message": "saved recipe"}`))
+	fmt.Fprintf(w, id)
 }
 
+// return a list of all recipes
 func listRecipes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
