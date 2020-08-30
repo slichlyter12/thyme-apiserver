@@ -5,12 +5,19 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
 	"fmt"
 	"os"
 )
 
 var svc *dynamodb.DynamoDB
+
+// Recipe that users can create
+type Recipe struct {
+	Name   string
+	Author string
+}
 
 func init() {
 	region := os.Getenv("AWS_REGION")
@@ -32,8 +39,10 @@ func init() {
 	}
 }
 
+// - MARK: Table Methods
+
 // CreateRecipeTable creates a new table to store recipes in
-func CreateRecipeTable() (string, error) {
+func CreateRecipeTable() error {
 	tableName := "Recipe"
 
 	input := &dynamodb.CreateTableInput{
@@ -66,10 +75,10 @@ func CreateRecipeTable() (string, error) {
 
 	_, err := svc.CreateTable(input)
 	if err != nil {
-		return "Error creating Recipe table", err
+		return err
 	}
 
-	return "created Recipe Table", nil
+	return nil
 }
 
 // GetTables returns a list of all tables in the DB
@@ -121,4 +130,51 @@ func DeleteTable(tableName string) error {
 	}
 
 	return nil
+}
+
+// - MARK: Recipe methods
+
+// SaveRecipe saves a recipe to the dynamodb Recipe table
+func SaveRecipe(recipe Recipe) error {
+	av, err := dynamodbattribute.MarshalMap(recipe)
+	if err != nil {
+		fmt.Printf("Error marshalling recipe item: %s\n", err.Error())
+		return err
+	}
+
+	tableName := "Recipe"
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(tableName),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		fmt.Printf("Error saving recipe: %s\n", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// ListAllRecipes returns a list of all recipes
+func ListAllRecipes() ([]Recipe, error) {
+	tableName := "Recipe"
+	params := &dynamodb.ScanInput{
+		TableName: aws.String(tableName),
+	}
+
+	result, err := svc.Scan(params)
+	if err != nil {
+		return nil, err
+	}
+
+	recipes := []Recipe{}
+	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &recipes)
+	if err != nil {
+		return recipes, err
+	}
+
+	return recipes, nil
 }

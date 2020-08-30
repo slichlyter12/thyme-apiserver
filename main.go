@@ -12,16 +12,13 @@ import (
 )
 
 func setup(w http.ResponseWriter, r *http.Request) {
-	message, derr := database.CreateRecipeTable()
-	if derr != nil {
+	err := database.CreateRecipeTable()
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(derr.Error()))
+		w.Write([]byte(err.Error()))
 	}
 
-	bytes, err := json.Marshal(message)
-	if err != nil {
-		w.Write(bytes)
-	}
+	w.Write([]byte(`OK`))
 }
 
 func listTables(w http.ResponseWriter, r *http.Request) {
@@ -40,13 +37,39 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
+}
+
+func saveRecipe(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	decoder := json.NewDecoder(r.Body)
+
+	var recipe database.Recipe
+	err := decoder.Decode(&recipe)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"message": "error parsing json request"}`))
+		return
+	}
+
+	err = database.SaveRecipe(recipe)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"message": "error saving recipe"}`))
+		return
+	}
+
+	w.Write([]byte(`{"message": "saved recipe"}`))
 }
 
 func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/init", setup).Methods("POST")
 	router.HandleFunc("/table", listTables).Methods("GET")
+	router.HandleFunc("/recipe", saveRecipe).Methods("POST")
 
 	fmt.Println("Serving on 8080...")
 	log.Fatal(http.ListenAndServe(":8080", router))
