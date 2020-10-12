@@ -61,19 +61,11 @@ func CreateRecipeTable() error {
 				AttributeName: aws.String("ID"),
 				AttributeType: aws.String("S"),
 			},
-			{
-				AttributeName: aws.String("Author"),
-				AttributeType: aws.String("S"),
-			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
 				AttributeName: aws.String("ID"),
 				KeyType:       aws.String("HASH"),
-			},
-			{
-				AttributeName: aws.String("Author"),
-				KeyType:       aws.String("RANGE"),
 			},
 		},
 		ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
@@ -175,7 +167,7 @@ func SaveRecipe(recipe Recipe) (string, error) {
 		return "", err
 	}
 
-	return id.String(), nil
+	return recipe.ID, nil
 }
 
 // ListAllRecipes returns a list of all recipes as a slice of recipe structs

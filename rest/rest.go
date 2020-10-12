@@ -17,6 +17,7 @@ func init() {
 	Router.HandleFunc("/init", handleInit)
 	Router.HandleFunc("/table", handleTable)
 	Router.HandleFunc("/recipe", handleRecipe)
+	Router.HandleFunc("/recipe/{id}", handleRecipe)
 }
 
 // handles the /init route
@@ -43,9 +44,15 @@ func handleTable(w http.ResponseWriter, r *http.Request) {
 
 // handles the /recipe route
 func handleRecipe(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
 	switch r.Method {
 	case "GET":
-		listRecipes(w, r)
+		if len(vars) > 0 {
+			getRecipe(w, r, vars["id"])
+		} else {
+			listRecipes(w, r)
+		}
 		return
 	case "POST":
 		saveRecipe(w, r)
@@ -133,6 +140,26 @@ func listRecipes(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"message": "error marshalling recipes"}`))
 		return
+	}
+
+	w.Write(bytes)
+}
+
+// return a singular list with the recipe of the given ID
+func getRecipe(w http.ResponseWriter, r *http.Request, id string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	recipe, err := database.GetRecipe(id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		return
+	}
+
+	bytes, err := json.Marshal(recipe)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"message": "error marshalling recipe"}`))
 	}
 
 	w.Write(bytes)
