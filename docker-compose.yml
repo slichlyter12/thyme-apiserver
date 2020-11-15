@@ -11,12 +11,17 @@ services:
     links:
         - "dynamodb-local"
     environment: 
-        - AWS_ACCESS_KEY_ID='test'
-        - AWS_SECRET_ACCESS_KEY='testkey'
-        - AWS_REGION='us-west-2'
+        - AWS_ACCESS_KEY_ID=test
+        - AWS_SECRET_ACCESS_KEY=testkey
+        - AWS_REGION=us-west-2
         - AWS_ENDPOINT=http://dynamodb-local:8000
  dynamodb-local:
    image: amazon/dynamodb-local:latest
    container_name: dynamodb-local
+   command: -jar DynamoDBLocal.jar -sharedDb /home/dynamodblocal/db-data/
    ports:
     - "8000:8000"
+   volumes:
+    - db-data:/home/dynamodblocal/db-data
+volumes:
+    db-data:

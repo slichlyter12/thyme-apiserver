@@ -19,23 +19,23 @@ var svc *dynamodb.DynamoDB
 
 // Recipe that users can create
 type Recipe struct {
-	ID          string
-	Name        string
-	Author      string
-	Description string
-	Cuisine     string
-	ImageName   string
-	Ingredients map[string]string
-	Steps       []string
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Author      string            `json:"author"`
+	Description string            `json:"description"`
+	Cuisine     string            `json:"cuisine"`
+	ImageName   string            `json:"imageName"`
+	Ingredients map[string]string `json:"ingredients"`
+	Steps       []string          `json:"steps"`
 }
 
 func init() {
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
+	region, isSet := os.LookupEnv("AWS_REGION")
+	if !isSet {
 		region = "us-west-2"
 	}
-	endpoint := os.Getenv("AWS_ENDPOINT")
-	if endpoint == "" {
+	endpoint, isSet := os.LookupEnv("AWS_ENDPOINT")
+	if !isSet {
 		endpoint = "http://localhost:8000"
 	}
 
@@ -49,22 +49,20 @@ func init() {
 	}
 }
 
-// - MARK: Table Methods
+// MARK: - Table Methods
 
 // CreateRecipeTable creates a new table to store recipes in
 func CreateRecipeTable() error {
-	tableName := "Recipe"
-
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("ID"),
+				AttributeName: aws.String("id"),
 				AttributeType: aws.String("S"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("ID"),
+				AttributeName: aws.String("id"),
 				KeyType:       aws.String("HASH"),
 			},
 		},
@@ -72,7 +70,7 @@ func CreateRecipeTable() error {
 			ReadCapacityUnits:  aws.Int64(10),
 			WriteCapacityUnits: aws.Int64(10),
 		},
-		TableName: aws.String(tableName),
+		TableName: aws.String(RecipeTable),
 	}
 
 	_, err := svc.CreateTable(input)
@@ -145,6 +143,8 @@ func SaveRecipe(recipe Recipe) (string, error) {
 	}
 	recipe.ID = id.String()
 
+	fmt.Print(recipe)
+
 	// marshal recipe
 	av, err := dynamodbattribute.MarshalMap(recipe)
 	if err != nil {
@@ -152,11 +152,9 @@ func SaveRecipe(recipe Recipe) (string, error) {
 		return "", err
 	}
 
-	tableName := "Recipe"
-
 	input := &dynamodb.PutItemInput{
 		Item:         av,
-		TableName:    aws.String(tableName),
+		TableName:    aws.String(RecipeTable),
 		ReturnValues: aws.String("ALL_OLD"),
 	}
 
@@ -172,9 +170,8 @@ func SaveRecipe(recipe Recipe) (string, error) {
 
 // ListAllRecipes returns a list of all recipes as a slice of recipe structs
 func ListAllRecipes() ([]Recipe, error) {
-	tableName := "Recipe"
 	params := &dynamodb.ScanInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(RecipeTable),
 	}
 
 	result, err := svc.Scan(params)
@@ -193,14 +190,12 @@ func ListAllRecipes() ([]Recipe, error) {
 
 // GetRecipe fetches a recipe by it's ID
 func GetRecipe(id string) (Recipe, error) {
-	tableName := "Recipe"
-
 	var recipe Recipe
 
 	result, err := svc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(RecipeTable),
 		Key: map[string]*dynamodb.AttributeValue{
-			"ID": {
+			"id": {
 				S: aws.String(id),
 			},
 		},

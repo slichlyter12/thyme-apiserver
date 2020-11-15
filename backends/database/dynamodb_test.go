@@ -21,7 +21,7 @@ func TestCreateTableError(t *testing.T) {
 func TestGetTables(t *testing.T) {
 	tables, _ := GetTables()
 	expectedNumberOfTables := 1
-	if len(tables) != 1 {
+	if len(tables) != expectedNumberOfTables {
 		t.Errorf("There are %d tables instead of %d", len(tables), expectedNumberOfTables)
 	}
 }
@@ -72,7 +72,7 @@ func TestListAllRecipes(t *testing.T) {
 }
 
 func TestDeleteTable(t *testing.T) {
-	err := DeleteTable("Recipe")
+	err := DeleteTable(RecipeTable)
 	if err != nil {
 		t.Errorf("Error deleting table: %s", err.Error())
 	}

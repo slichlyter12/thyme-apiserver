@@ -2,7 +2,6 @@ package rest
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -14,10 +13,18 @@ var Router *mux.Router
 
 func init() {
 	Router = mux.NewRouter()
-	Router.HandleFunc("/init", handleInit)
-	Router.HandleFunc("/table", handleTable)
-	Router.HandleFunc("/recipe", handleRecipe)
-	Router.HandleFunc("/recipe/{id}", handleRecipe)
+	apiRouter := Router.PathPrefix("/api").Subrouter()
+	apiRouter.HandleFunc("/status", handleStatus)
+	apiRouter.HandleFunc("/init", handleInit)
+	apiRouter.HandleFunc("/table", handleTable)
+	apiRouter.HandleFunc("/recipe", handleRecipe)
+	apiRouter.HandleFunc("/recipe/{id}", handleRecipe)
+}
+
+// handles the /status route
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write([]byte(`OK`))
 }
 
 // handles the /init route
@@ -70,6 +77,7 @@ func setup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		return
 	}
 
 	w.Write([]byte(`OK`))
@@ -117,11 +125,12 @@ func saveRecipe(w http.ResponseWriter, r *http.Request) {
 	id, err := database.SaveRecipe(recipe)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error saving recipe"}`))
+		w.Write([]byte(`{"message": "` + err.Error() + `"}`))
 		return
 	}
 
-	fmt.Fprintf(w, id)
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"id": "` + id + `"}`))
 }
 
 // return a list of all recipes
@@ -131,14 +140,14 @@ func listRecipes(w http.ResponseWriter, r *http.Request) {
 	recipes, err := database.ListAllRecipes()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error listing recipes"}`))
+		w.Write([]byte(`{"message": "error listing recipes", "error": "` + err.Error() + `"}`))
 		return
 	}
 
 	bytes, err := json.Marshal(recipes)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error marshalling recipes"}`))
+		w.Write([]byte(`{"message": "error marshalling recipes", "error": "` + err.Error() + `"}`))
 		return
 	}
 
