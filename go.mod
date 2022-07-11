@@ -1,10 +1,15 @@
 module github.com/slichlyter12/thyme-apiserver
 
-go 1.14
+go 1.17
 
 require (
-	github.com/aws/aws-sdk-go v1.34.13
+	github.com/aws/aws-sdk-go v1.43.12
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
-	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
+)
+
+require (
+	github.com/felixge/httpsnoop v1.0.2 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )

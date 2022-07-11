@@ -8,146 +8,142 @@ import (
 	"github.com/slichlyter12/thyme-apiserver/backends/database"
 )
 
-// Router handles all the URLS for the API server
-var Router *mux.Router
+type Client struct {
+	Router   *mux.Router
+	dbClient *database.Client
+}
 
-func init() {
-	Router = mux.NewRouter()
-	apiRouter := Router.PathPrefix("/api").Subrouter()
+func New() *Client {
+	router := mux.NewRouter()
+	router.Use(alwaysJSON)
+	router.Use(logging)
+
+	client := &Client{
+		Router:   router,
+		dbClient: database.New(),
+	}
+
+	client.setupRoutes()
+	client.dbClient.EnsureTables()
+	return client
+}
+
+func (client *Client) setupRoutes() {
+	apiRouter := client.Router.PathPrefix("/api").Subrouter()
 	apiRouter.HandleFunc("/status", handleStatus)
-	apiRouter.HandleFunc("/init", handleInit)
-	apiRouter.HandleFunc("/table", handleTable)
-	apiRouter.HandleFunc("/recipe", handleRecipe)
-	apiRouter.HandleFunc("/recipe/{id}", handleRecipe)
+	apiRouter.HandleFunc("/recipe", client.handleRecipe)
+	apiRouter.HandleFunc("/recipe/{id}", client.handleRecipe)
 }
 
 // handles the /status route
 func handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write([]byte(`OK`))
-}
-
-// handles the /init route
-func handleInit(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		setup(w, r)
-		return
+	ok := map[string]string{
+		"message": "ok",
 	}
-
-	w.WriteHeader(http.StatusMethodNotAllowed)
-}
-
-// handles the /table route
-func handleTable(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		listTables(w, r)
-		return
-	}
-
-	w.WriteHeader(http.StatusMethodNotAllowed)
+	okBytes, _ := json.Marshal(ok)
+	w.Write(okBytes)
 }
 
 // handles the /recipe route
-func handleRecipe(w http.ResponseWriter, r *http.Request) {
+func (client *Client) handleRecipe(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	switch r.Method {
 	case "GET":
 		if len(vars) > 0 {
-			getRecipe(w, r, vars["id"])
+			client.getRecipe(w, r, vars["id"])
 		} else {
-			listRecipes(w, r)
+			client.listRecipes(w, r)
 		}
 		return
 	case "POST":
-		saveRecipe(w, r)
+		client.saveRecipe(w, r)
+		return
+	case "PUT":
+		client.updateRecipe(w, r, vars["id"])
+		return
+	case "DELETE":
+		client.deleteRecipe(w, r, vars["id"])
 		return
 	}
 
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-// - MARK: Table methods
-
-// creates the Recipe table
-func setup(w http.ResponseWriter, r *http.Request) {
-	err := database.CreateRecipeTable()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	w.Write([]byte(`OK`))
-}
-
-// list all tables in DynamoDB, including those not used
-// by this API server
-func listTables(w http.ResponseWriter, r *http.Request) {
-	tables, derr := database.GetTables()
-	if tables == nil {
-		w.Write([]byte(`[]`))
-		return
-	}
-	if derr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(derr.Error()))
-	}
-	bytes, err := json.Marshal(tables)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(bytes)
-}
-
 // - MARK: Recipe methods
 
 // save a recipe from the body of the method in JSON format
-func saveRecipe(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+func (client *Client) saveRecipe(w http.ResponseWriter, r *http.Request) {
+	// decode request
 	decoder := json.NewDecoder(r.Body)
-
 	var recipe database.Recipe
 	err := decoder.Decode(&recipe)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"message": "error parsing json request"}`))
+		writeError(w, "error parsing JSON request", http.StatusBadRequest)
 		return
 	}
 
-	id, err := database.SaveRecipe(recipe)
+	// save recipe
+	savedRecipe, err := client.dbClient.SaveRecipe(recipe)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		writeError(
+			w,
+			"could not save recipe, please try again later",
+			http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(`{"id": "` + id + `"}`))
+	// encode response
+	recipeJSON, err := json.Marshal(savedRecipe)
+	if err != nil {
+		writeError(w, "could not encode recipe", http.StatusInternalServerError)
+		return
+	}
+
+	// write response
+	writeBytesStatus(w, recipeJSON, http.StatusCreated)
+}
+
+// update an existing recipe
+func (client *Client) updateRecipe(w http.ResponseWriter, r *http.Request, recipeID string) {
+	// get already existing recipe
+	oldRecipe, err := client.dbClient.GetRecipe(recipeID)
+	if err != nil {
+		writeError(w, "could not find recipe with that id", http.StatusNotFound)
+		return
+	}
+
+	// get updated receipe details
+	decoder := json.NewDecoder(r.Body)
+	var updatedRecipe database.Recipe
+	err = decoder.Decode(&updatedRecipe)
+	if err != nil {
+		writeError(w, "error parsing json request", http.StatusBadRequest)
+		return
+	}
+
+	// update recipe
+	err = client.dbClient.UpdateRecipe(updatedRecipe, oldRecipe.ID)
+	if err != nil {
+		writeError(w, "could not update recipe", http.StatusInternalServerError)
+		return
+	}
+
+	// send response
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // return a list of all recipes
-func listRecipes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	recipes, err := database.ListAllRecipes()
+func (client *Client) listRecipes(w http.ResponseWriter, r *http.Request) {
+	recipes, err := client.dbClient.ListAllRecipes()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error listing recipes", "error": "` + err.Error() + `"}`))
+		writeError(w, "error listing recipes", http.StatusInternalServerError)
 		return
 	}
 
 	bytes, err := json.Marshal(recipes)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error marshalling recipes", "error": "` + err.Error() + `"}`))
+		writeError(w, "could not marshal recipes", http.StatusInternalServerError)
 		return
 	}
 
@@ -155,21 +151,46 @@ func listRecipes(w http.ResponseWriter, r *http.Request) {
 }
 
 // return a singular list with the recipe of the given ID
-func getRecipe(w http.ResponseWriter, r *http.Request, id string) {
-	w.Header().Set("Content-Type", "application/json")
-
-	recipe, err := database.GetRecipe(id)
+func (client *Client) getRecipe(w http.ResponseWriter, r *http.Request, id string) {
+	recipe, err := client.dbClient.GetRecipe(id)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		writeError(w, "could not get recipe with that id", http.StatusNotFound)
 		return
 	}
 
 	bytes, err := json.Marshal(recipe)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "error marshalling recipe"}`))
+		writeError(w, "could not marshal recipes", http.StatusInternalServerError)
+		return
 	}
 
+	w.Write(bytes)
+}
+
+func (client *Client) deleteRecipe(w http.ResponseWriter, r *http.Request, id string) {
+	_, err := client.dbClient.GetRecipe(id)
+	if err != nil {
+		writeError(w, "could not find recipe with that id", http.StatusNotFound)
+		return
+	}
+
+	err = client.dbClient.DeleteRecipe(id)
+	if err != nil {
+		writeError(w, "could not delete recipe: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeBytesStatus(w, nil, http.StatusNoContent)
+}
+
+// - MARK: Helper Functions
+
+func writeError(w http.ResponseWriter, errorMessage string, statusCode int) {
+	w.WriteHeader(statusCode)
+	w.Write([]byte(`{"error": "` + errorMessage + `"}`))
+}
+
+func writeBytesStatus(w http.ResponseWriter, bytes []byte, statusCode int) {
+	w.WriteHeader(statusCode)
 	w.Write(bytes)
 }

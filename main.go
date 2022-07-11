@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	router := rest.Router
+	restClient := rest.New()
 
 	fmt.Println("Serving on 8080...")
-	log.Fatal(http.ListenAndServe(":8080", handlers.CORS()(router)))
+	log.Fatal(http.ListenAndServe(":8080", handlers.CORS()(restClient.Router)))
 }
